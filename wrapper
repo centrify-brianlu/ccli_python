@@ -1,0 +1,100 @@
+from pprint import pprint
+import json, requests as r
+
+username = "thisisauser@user.com"
+password = "SuperSecurePasswordHere"
+
+t1 = ["1.my.centrify.net","abd0701"]
+t2 = ["2.my.centrify-kibble.net","aaa3589"]
+
+# Start Authentication
+def auth(tenant):
+    #sec_startauth
+    head = {
+        "X-CENTRIFY-NATIVE-CLIENT": "true",
+        "Content-Type": "application/json"
+    }
+
+    key = {
+        "TenantId": tenant[1],
+        "User": username,
+        "Version": "1.0"
+        }
+
+    response = r.post("https://"+tenant[0]+"/Security/StartAuthentication",headers=head,json=key).json()
+    sessionid = response["Result"]["SessionId"]
+    mechanismid_00 = response["Result"]["Challenges"][0]['Mechanisms'][0]['MechanismId']
+    #mechanismid_01 = response["Result"]["Challenges"][1]['Mechanisms'][1]['MechanismId']
+
+    #sec_advauth_01
+    key = {
+        "TenantId": tenant[1],
+        "SessionId": sessionid,
+        "MechanismId": mechanismid_00,
+        "Action": "Answer",
+        "Answer": password
+        }
+    
+    adv_response = r.post("https://"+tenant[0]+"/Security/AdvanceAuthentication",headers=head,json=key)
+
+    # #sec_advauth_02
+    # key = {
+    #     "TenantId": tenantid,
+    #     "SessionId": sessionid,
+    #     "MechanismId": mechanismid_01,
+    #     "Action": "Answer",
+    #     "Answer": "secquestionanswer"
+    #     }
+    
+    # adv_response = r.post("https://"+tenanturl+"/Security/AdvanceAuthentication",headers=head,json=key)
+
+    return adv_response.cookies['.ASPXAUTH']
+
+# Post
+def post(tenant, endpoint, key=None):
+    
+    if endpoint.lower() == "/redrock/query":
+
+        headers = {
+            "X-CENTRIFY-NATIVE-CLIENT": "true",
+            "Content-Type": "application/json",
+            'Accept': "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
+            'Authorization': "Bearer"+" "+ auth(tenant)
+            }
+        
+        query = {
+            "Script":key,
+            "args":
+                {
+                "PageNumber":1,
+                "PageSize":100,
+                "Limit":10000,
+                "Caching":-1,
+                }
+            }
+
+        return r.post("https://"+tenant[0]+"/Redrock/query", headers=headers, json=query).json()
+    
+    else:
+
+        headers = {
+        "X-CENTRIFY-NATIVE-CLIENT": "true",
+        "Content-Type": "application/json",
+        'accept': "*/*",
+        'Authorization': "Bearer " + auth(tenant)
+        }
+
+        return r.get("https://"+tenant[0]+endpoint, headers=headers, json=key).json()
+
+
+##### Grabbing an OAuth2 Token:
+pprint(post(t1,"/security/whoami"))
+
+##pprint(post(t1,"/sysinfo/version"))
+#pprint(post(t1,"/redrock/query","select * from user"))
+
+
+
+##### rotating sets
+# pprint(post(t1, "/ServerManage/RotatePasswords", {'SetQuery':'@!77567d88-1bcc-4262-9922-015b085ce094','RunSync':'false','Ids':[]}))
